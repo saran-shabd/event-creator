@@ -1,10 +1,12 @@
-import * as firebase from 'firebase';
+import * as firebase from 'firebase'
+import axios from 'axios'
 
 // load all action types
 import {
   LOAD_ALL_SERVICE_PROVIDERS,
-  POST_EVENT_IN_DB
-} from '../types/eventTypes';
+  POST_EVENT_IN_DB,
+  LOAD_ALL_EVENTS_IN_A_MONTH
+} from '../types/eventTypes'
 
 // load firebase configuration from environment
 const {
@@ -15,7 +17,7 @@ const {
   REACT_APP_STORAGE_BUCKET,
   REACT_APP_MESSAGING_SENDER_ID,
   REACT_APP_APP_ID
-} = process.env;
+} = process.env
 
 /**
  * Initialize Firebase SDK
@@ -28,36 +30,89 @@ firebase.initializeApp({
   storageBucket: REACT_APP_STORAGE_BUCKET,
   messagingSenderId: REACT_APP_MESSAGING_SENDER_ID,
   appId: REACT_APP_APP_ID
-});
-const firestore = firebase.firestore();
+})
+const firestore = firebase.firestore()
 
-export const loadAllEventsInAMonth = () => dispatch => {
+export const loadAllServiceProviders = () => dispatch => {
   return new Promise((resolve, reject) => {
     firestore
       .collection('service')
       .get()
       .then(doc => {
-        let allDocs = doc.docs;
-        for (let i in allDocs) allDocs[i] = allDocs[i].data();
-        dispatch({ type: LOAD_ALL_SERVICE_PROVIDERS, payload: allDocs });
-        resolve();
+        let allDocs = doc.docs
+        let finalDocs = []
+        for (let i in allDocs) {
+          allDocs[i] = allDocs[i].data()
+          finalDocs[allDocs[i].name] = allDocs[i].email
+        }
+        dispatch({ type: LOAD_ALL_SERVICE_PROVIDERS, payload: finalDocs })
+        resolve()
       })
       .catch(error => {
-        console.log(error);
-        reject();
-      });
-  });
-};
+        console.log(error)
+        reject()
+      })
+  })
+}
 
 export const postEventInDB = (
-  data,
+  date,
   title,
   description,
   venue,
   serviceProdivers
 ) => dispatch => {
   return new Promise((resolve, reject) => {
-    // API call
-    dispatch({ type: POST_EVENT_IN_DB });
-  });
-};
+    const collection = firestore.collection('events')
+    collection
+      .doc()
+      .set({
+        date,
+        title,
+        description,
+        venue,
+        serviceProdivers
+      })
+      .then(() => {
+        // send email to all the service providers about the event
+        for (let i in serviceProdivers) {
+          axios
+            .post(process.env.REACT_APP_EMAIL_SENDER_API_URL, {
+              date,
+              title,
+              description,
+              venue,
+              handler: serviceProdivers[i].handler,
+              handlerEmail: serviceProdivers[i].handlerEmail
+            })
+            .catch(error => console.log(error))
+        }
+        dispatch({ type: POST_EVENT_IN_DB })
+        resolve()
+      })
+      .catch(error => {
+        alert(error)
+        reject()
+      })
+  })
+}
+
+export const loadAllEventsInAMonth = currDate => dispatch => {
+  return new Promise((resolve, reject) => {
+    const events = firestore.collection('events')
+    events.where('date', '==', currDate).onSnapshot(
+      snapshot => {
+        const allDocs = snapshot.docs
+        const finalDoc = []
+        for (let i in allDocs) finalDoc.push(allDocs[i].data())
+
+        resolve()
+        dispatch({ type: LOAD_ALL_EVENTS_IN_A_MONTH, payload: finalDoc })
+      },
+      error => {
+        console.log(error)
+        reject()
+      }
+    )
+  })
+}

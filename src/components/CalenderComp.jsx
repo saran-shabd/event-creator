@@ -1,27 +1,33 @@
-import React, { Component } from 'react';
-import { DatePicker } from '@material-ui/pickers';
-import Button from '@material-ui/core/Button';
-import TextField from '@material-ui/core/TextField';
-import Dialog from '@material-ui/core/Dialog';
-import DialogActions from '@material-ui/core/DialogActions';
-import DialogContent from '@material-ui/core/DialogContent';
-import DialogTitle from '@material-ui/core/DialogTitle';
-import MenuItem from '@material-ui/core/MenuItem';
-import Select from '@material-ui/core/Select';
-import InputLabel from '@material-ui/core/InputLabel';
-import FormControl from '@material-ui/core/FormControl';
-import Grid from '@material-ui/core/Grid';
-import Checkbox from '@material-ui/core/Checkbox';
-import FormGroup from '@material-ui/core/FormGroup';
-import FormControlLabel from '@material-ui/core/FormControlLabel';
-import PropTypes from 'prop-types';
-import { connect } from 'react-redux';
+import React, { Component } from 'react'
+import FullCalendar from '@fullcalendar/react'
+import dayGridPlugin from '@fullcalendar/daygrid'
+import interactionPlugin from '@fullcalendar/interaction'
+import '@fullcalendar/core/main.css'
+import '@fullcalendar/daygrid/main.css'
+import Button from '@material-ui/core/Button'
+import TextField from '@material-ui/core/TextField'
+import Dialog from '@material-ui/core/Dialog'
+import DialogActions from '@material-ui/core/DialogActions'
+import DialogContent from '@material-ui/core/DialogContent'
+import DialogTitle from '@material-ui/core/DialogTitle'
+import MenuItem from '@material-ui/core/MenuItem'
+import Select from '@material-ui/core/Select'
+import InputLabel from '@material-ui/core/InputLabel'
+import FormControl from '@material-ui/core/FormControl'
+import Grid from '@material-ui/core/Grid'
+import Checkbox from '@material-ui/core/Checkbox'
+import FormGroup from '@material-ui/core/FormGroup'
+import FormControlLabel from '@material-ui/core/FormControlLabel'
+import PropTypes from 'prop-types'
+import { connect } from 'react-redux'
 
 // import redux actions
 import {
+  loadAllServiceProviders,
   loadAllEventsInAMonth,
   postEventInDB
-} from '../store/actions/eventActions';
+} from '../store/actions/eventActions'
+import { Card, CardContent } from '@material-ui/core'
 
 class CalenderComp extends Component {
   state = {
@@ -37,55 +43,100 @@ class CalenderComp extends Component {
     // dialog flag value
     open: false,
     // create new event flag
-    createNewEvent: false
-  };
-
-  componentWillMount() {
-    this.props
-      .loadAllEventsInAMonth()
-      .then(() => {})
-      .catch(() => {
-        alert('Could not load data from database');
-      });
+    createNewEvent: false,
+    // events
+    events: undefined,
+    tempEvents: [
+      {
+        title: 'Temp Event',
+        date: '2019-08-01'
+      }
+    ]
   }
 
-  handleOnOpen = () => this.setState({ open: true });
-  handleOnClose = () => this.setState({ open: false });
+  componentWillMount() {
+    this.props.loadAllServiceProviders()
+  }
+
+  componentWillReceiveProps(props) {
+    this.setState({ events: props.events })
+  }
+
+  handleOnOpen = () => this.setState({ open: true })
+  handleOnClose = () => this.setState({ open: false })
 
   onDateChange = date => {
-    // update event date
+    const dateArr = date.toString().split(' ')
+    const eventDate = dateArr[2]
+    const eventMonth = dateArr[1]
+    const eventYear = dateArr[3]
 
-    this.setState({ date });
-    const dateArr = date.toString().split(' ');
-    const eventDate = dateArr[2];
-    const eventMonth = dateArr[1];
-    const eventYear = dateArr[3];
+    this.props
+      .loadAllEventsInAMonth(`${eventDate}/${eventMonth}/${eventYear}`)
+      .then(() => {
+        // update event date
+        this.setState({ date })
+        this.setState({
+          eventTimestamp: `${eventDate}/${eventMonth}/${eventYear}`
+        })
 
-    const eventTimestamp = new Date(`${eventDate}/${eventMonth}/${eventYear}`);
-    this.setState({ eventTimestamp });
-
-    // open modal
-    this.handleOnOpen();
-  };
+        // open modal
+        this.handleOnOpen()
+      })
+      .catch(() => {
+        alert('Could not load data from database')
+      })
+  }
 
   onRegisterEvent = () => {
-    this.setState({ createNewEvent: false });
+    // this.setState({ createNewEvent: false });
+
+    // get service provider email
+    let services = []
+
+    if (this.state.transport)
+      services.push({
+        handler: 'transport',
+        handlerEmail: this.props.serviceProviders['transport']
+      })
+
+    if (this.state.caterer)
+      services.push({
+        handler: 'caterer',
+        handlerEmail: this.props.serviceProviders['caterer']
+      })
 
     // API call
-    this.props.postEventInDB();
-  };
+    this.props
+      .postEventInDB(
+        this.state.eventTimestamp,
+        this.state.eventTitle,
+        this.state.eventDescription,
+        this.state.eventVenue,
+        services
+      )
+      .then(() => this.setState({ createNewEvent: false }))
+      .catch(() => alert('please try again later'))
+  }
 
   render() {
     return (
       <div>
-        <DatePicker
-          autoOk
-          orientation='landscape'
-          variant='static'
-          openTo='date'
-          value={this.state.date}
-          onChange={this.onDateChange}
-        />
+        <Grid container direction='row' justify='center' alignItems='center'>
+          <Grid
+            item
+            xs={12}
+            sm={6}
+            md={6}
+            style={{ paddingTop: 20, paddingBottom: 20 }}
+          >
+            <FullCalendar
+              defaultView='dayGridMonth'
+              plugins={[dayGridPlugin, interactionPlugin]}
+              dateClick={date => this.onDateChange(date.date)}
+            />
+          </Grid>
+        </Grid>
         <Dialog
           fullWidth
           open={this.state.open}
@@ -96,7 +147,27 @@ class CalenderComp extends Component {
 
           <DialogContent>
             {/* Already Existing Event(s) Details */}
-            {/* TODO */}
+            {this.state.events ? (
+              <span>
+                {this.state.events.map(event => {
+                  return (
+                    <>
+                      <Card>
+                        <CardContent>
+                          <strong>Event Title</strong> {event.title}
+                          <br />
+                          <strong>Event Description</strong> {event.description}
+                          <br />
+                          <strong>Event Venue</strong> {event.venue}
+                          <br />
+                        </CardContent>
+                      </Card>
+                      <br />
+                    </>
+                  )
+                })}
+              </span>
+            ) : null}
 
             {!this.state.createNewEvent ? (
               <Button
@@ -108,13 +179,11 @@ class CalenderComp extends Component {
               </Button>
             ) : null}
 
-            <br />
-            <br />
-
             {/* Dialog to Create New Event */}
 
             {this.state.createNewEvent ? (
               <span>
+                <h3>Register New Event</h3>
                 <TextField
                   autoFocus
                   fullWidth
@@ -206,7 +275,7 @@ class CalenderComp extends Component {
                       color: '#fff',
                       marginRight: '0.5rem'
                     }}
-                    onClick={() => this.onRegisterEvent}
+                    onClick={this.onRegisterEvent}
                   >
                     Register Event
                   </Button>
@@ -215,7 +284,7 @@ class CalenderComp extends Component {
                     color='secondary'
                     style={{ marginLeft: '0.5rem' }}
                     onClick={() => {
-                      this.setState({ createNewEvent: false });
+                      this.setState({ createNewEvent: false })
                     }}
                   >
                     Cancel
@@ -232,17 +301,20 @@ class CalenderComp extends Component {
           </DialogActions>
         </Dialog>
       </div>
-    );
+    )
   }
 }
 
 CalenderComp.propTypes = {
   loadAllEventsInAMonth: PropTypes.func.isRequired
-};
+}
 
-// const mapStateToProps = state => {};
+const mapStateToProps = state => ({
+  serviceProviders: state.service,
+  events: state.event.events
+})
 
 export default connect(
-  null,
-  { loadAllEventsInAMonth, postEventInDB }
-)(CalenderComp);
+  mapStateToProps,
+  { loadAllServiceProviders, loadAllEventsInAMonth, postEventInDB }
+)(CalenderComp)
