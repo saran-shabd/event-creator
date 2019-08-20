@@ -1,3 +1,3 @@
-# Event Creator for Mext
+# Event Creator Service for Mext
 
-This module was a part of an internship I did at [Mext](https://www.mext.in).
+This module is part of [Mext](https://www.mext.in), created for professors to create and organize events in college.
